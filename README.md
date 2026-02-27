@@ -14,27 +14,25 @@ VibeReal is a spatial computing application that provides a hands-free, voice-co
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  Unity App (XREAL SDK 3.x)                                   │   │
 │  │  - Spatial UI panels for each Claude session                 │   │
-│  │  - Voice recognition (Android SpeechRecognizer API)          │   │
-│  │  - TTS for Claude responses (Android Native TTS)             │   │
-│  │  - Hand tracking for fallback gestures                       │   │
+│  │  - Voice input (Android STT) + TTS output                    │   │
+│  │  - Hand tracking for gesture fallback                        │   │
 │  └───────────────────────┬──────────────────────────────────────┘   │
 │                          │ WebSocket                                │
 └──────────────────────────┼──────────────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────────┐
-│                    Your Server (n8n + Docker)                        │
+│                         Session Hub                                  │
 │  ┌────────────────────────────────────────────────────────────────┐ │
-│  │  Session Hub (WebSocket Server)                                │ │
-│  │  - Routes messages between AR app and Claude sessions          │ │
-│  │  - Maintains session registry                                  │ │
-│  │  - Pushes notifications to AR app                              │ │
+│  │  Core Server (Node.js / Bun)                                   │ │
+│  │  - Voice command processing (NLU / intent classification)     │ │
+│  │  - Session registry + message routing                         │ │
+│  │  - Notification management + prioritization                   │ │
+│  │  - External integrations API (webhooks, REST, WebSocket)      │ │
 │  └─────────────────────┬─────────────────┬────────────────────────┘ │
 │                        │                 │                          │
 │  ┌─────────────────────▼─┐   ┌───────────▼────────────────────────┐ │
-│  │  n8n Workflows        │   │  Claude Container Manager          │ │
-│  │  - Voice command NLU  │   │  - Manages Docker containers       │ │
-│  │  - Notification logic │   │  - Each container = Claude session │ │
-│  │  - Integrations       │   │                                    │ │
+│  │  Claude Containers    │   │  External Systems                  │ │
+│  │  (Docker-managed)     │   │  (n8n, Home Assistant, Slack...)   │ │
 │  └───────────────────────┘   └────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -43,11 +41,11 @@ VibeReal is a spatial computing application that provides a hands-free, voice-co
 
 | Component | Description | Spec |
 |-----------|-------------|------|
-| **Session Hub** | WebSocket server routing messages between AR app and Claude sessions | [specs/01-session-hub.md](specs/01-session-hub.md) |
-| **n8n Workflows** | Orchestration layer for voice command NLU, notifications, and integrations | [specs/02-n8n-workflows.md](specs/02-n8n-workflows.md) |
-| **XREAL Unity App** | AR frontend running on Beam Pro with spatial UI and voice controls | [specs/03-xreal-unity-app.md](specs/03-xreal-unity-app.md) |
-| **Container Manager** | Docker orchestration for isolated Claude Code environments | [specs/04-claude-container-manager.md](specs/04-claude-container-manager.md) |
-| **Voice Interface** | Wake word detection, STT, NLU, and TTS systems | [specs/05-voice-interface.md](specs/05-voice-interface.md) |
+| **Session Hub** | Central server handling all logic: WebSocket connections, voice command NLU, notifications, and integrations API | [specs/01-session-hub.md](specs/01-session-hub.md) |
+| **External Integrations** | REST/WebSocket/Webhook APIs for connecting n8n, Home Assistant, Slack, and other systems | [specs/02-external-integrations.md](specs/02-external-integrations.md) |
+| **XREAL Unity App** | AR frontend with spatial UI, voice controls, and hand tracking | [specs/03-xreal-unity-app.md](specs/03-xreal-unity-app.md) |
+| **Container Manager** | Docker orchestration for isolated Claude Code environments | [specs/04-container-manager.md](specs/04-container-manager.md) |
+| **Voice Interface** | Wake word detection, STT/TTS, and conversation flow | [specs/05-voice-interface.md](specs/05-voice-interface.md) |
 
 ## Features
 
@@ -69,12 +67,16 @@ VibeReal is a spatial computing application that provides a hands-free, voice-co
 - Containerized Claude sessions (via Docker)
 - Centralized notification system
 
+### External Integrations
+- **Webhooks** - Push events to n8n, Slack, Discord, etc.
+- **REST API** - Send commands from Home Assistant, scripts, CI/CD
+- **WebSocket** - Real-time bidirectional for custom dashboards
+
 ## Hardware Requirements
 
 - XREAL One glasses
 - XREAL Beam Pro
 - Server with Docker (for containerized sessions)
-- n8n instance (can run on same server)
 
 ## Getting Started
 
