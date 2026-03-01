@@ -1,6 +1,7 @@
 using System;
-using System.Collections;
+using System.Threading.Tasks;
 using UnityEngine;
+using NativeWebSocket;
 using VibeReal.Data;
 
 namespace VibeReal.Core
@@ -8,10 +9,8 @@ namespace VibeReal.Core
     public enum ConnectionState { Disconnected, Connecting, Connected, Reconnecting }
 
     /// <summary>
-    /// Minimal WebSocket client for MVP. Uses Unity's built-in networking
-    /// via a coroutine-based approach. For production, swap in NativeWebSocket.
-    ///
-    /// MVP scope: connect, send JSON, receive JSON, basic reconnect.
+    /// WebSocket client using NativeWebSocket (github.com/endel/NativeWebSocket).
+    /// Connects to the Session Hub, dispatches typed events for each message type.
     /// </summary>
     public class WebSocketClient : MonoBehaviour
     {
@@ -36,7 +35,7 @@ namespace VibeReal.Core
         public event Action<CommandAckMessage> OnCommandAck;
         public event Action<ConversationHistoryMessage> OnConversationHistory;
 
-        private WebSocket _ws;
+        private NativeWebSocket.WebSocket _ws;
         private int _reconnectCount;
         private int _requestCounter;
 
@@ -49,37 +48,52 @@ namespace VibeReal.Core
             Connect();
         }
 
-        private void OnDestroy()
+        private void Update()
         {
-            Disconnect();
+            // NativeWebSocket requires dispatching messages on the main thread
+#if !UNITY_WEBGL || UNITY_EDITOR
+            _ws?.DispatchMessageQueue();
+#endif
+        }
+
+        private async void OnDestroy()
+        {
+            await Disconnect();
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (_ws != null && _ws.State == WebSocketState.Open)
+            {
+                _ws.Close().Wait(1000);
+            }
         }
 
         // --- Public API ---
 
-        public void Connect()
+        public async void Connect()
         {
             if (State == ConnectionState.Connected || State == ConnectionState.Connecting)
                 return;
 
             State = ConnectionState.Connecting;
-            StartCoroutine(ConnectCoroutine());
+            await ConnectAsync();
         }
 
-        public void Disconnect()
+        public async Task Disconnect()
         {
-            StopAllCoroutines();
+            if (_ws == null) return;
 
-            if (_ws != null)
+            if (_ws.State == WebSocketState.Open)
             {
-                _ws.Close();
-                _ws = null;
+                await _ws.Close();
             }
-
+            _ws = null;
             State = ConnectionState.Disconnected;
             OnDisconnected?.Invoke();
         }
 
-        public void Send(string json)
+        public async void Send(string json)
         {
             if (State != ConnectionState.Connected || _ws == null)
             {
@@ -87,7 +101,7 @@ namespace VibeReal.Core
                 return;
             }
 
-            _ws.SendString(json);
+            await _ws.SendText(json);
         }
 
         // Typed send helpers
@@ -131,58 +145,72 @@ namespace VibeReal.Core
             Send(JsonUtility.ToJson(msg));
         }
 
-        // --- Connection coroutine ---
+        // --- Connection ---
 
-        private IEnumerator ConnectCoroutine()
+        private async Task ConnectAsync()
         {
             Debug.Log($"[WebSocketClient] Connecting to {hubUrl}...");
 
-            _ws = new WebSocket(new Uri(hubUrl));
-            yield return StartCoroutine(_ws.Connect());
+            _ws = new NativeWebSocket.WebSocket(hubUrl);
 
-            if (_ws.error != null)
+            _ws.OnOpen += () =>
             {
-                Debug.LogError($"[WebSocketClient] Connection failed: {_ws.error}");
-                OnError?.Invoke(_ws.error);
+                Debug.Log("[WebSocketClient] Connected!");
+                State = ConnectionState.Connected;
+                _reconnectCount = 0;
+                OnConnected?.Invoke();
+            };
+
+            _ws.OnMessage += (bytes) =>
+            {
+                var json = System.Text.Encoding.UTF8.GetString(bytes);
+                HandleMessage(json);
+            };
+
+            _ws.OnError += (error) =>
+            {
+                Debug.LogError($"[WebSocketClient] Error: {error}");
+                OnError?.Invoke(error);
+            };
+
+            _ws.OnClose += (code) =>
+            {
+                Debug.Log($"[WebSocketClient] Closed with code {code}");
                 State = ConnectionState.Disconnected;
+                OnDisconnected?.Invoke();
+                TryReconnect();
+            };
 
-                if (_reconnectCount < maxReconnectAttempts)
-                {
-                    _reconnectCount++;
-                    State = ConnectionState.Reconnecting;
-                    yield return new WaitForSeconds(reconnectDelay);
-                    StartCoroutine(ConnectCoroutine());
-                }
-                yield break;
+            try
+            {
+                await _ws.Connect();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[WebSocketClient] Connection failed: {e.Message}");
+                OnError?.Invoke(e.Message);
+                State = ConnectionState.Disconnected;
+                TryReconnect();
+            }
+        }
+
+        private async void TryReconnect()
+        {
+            if (_reconnectCount >= maxReconnectAttempts)
+            {
+                Debug.LogWarning("[WebSocketClient] Max reconnect attempts reached");
+                return;
             }
 
-            State = ConnectionState.Connected;
-            _reconnectCount = 0;
-            Debug.Log("[WebSocketClient] Connected!");
-            OnConnected?.Invoke();
+            _reconnectCount++;
+            State = ConnectionState.Reconnecting;
+            Debug.Log($"[WebSocketClient] Reconnecting in {reconnectDelay}s (attempt {_reconnectCount}/{maxReconnectAttempts})...");
 
-            // Message receive loop
-            while (_ws != null && _ws.error == null)
+            await Task.Delay((int)(reconnectDelay * 1000));
+
+            if (this != null && State == ConnectionState.Reconnecting)
             {
-                string reply = _ws.RecvString();
-                if (reply != null)
-                {
-                    HandleMessage(reply);
-                }
-                yield return null;
-            }
-
-            // Connection lost
-            Debug.Log("[WebSocketClient] Connection lost");
-            State = ConnectionState.Disconnected;
-            OnDisconnected?.Invoke();
-
-            if (_reconnectCount < maxReconnectAttempts)
-            {
-                _reconnectCount++;
-                State = ConnectionState.Reconnecting;
-                yield return new WaitForSeconds(reconnectDelay);
-                StartCoroutine(ConnectCoroutine());
+                await ConnectAsync();
             }
         }
 

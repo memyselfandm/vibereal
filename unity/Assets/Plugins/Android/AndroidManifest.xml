@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.vibereal.ar"
+    android:versionCode="1"
+    android:versionName="0.1.0">
+
+    <!-- Network access for WebSocket -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Microphone for future voice features -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Camera for AR passthrough -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <application
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true">
+
+        <!-- Required for XREAL glasses detection -->
+        <meta-data
+            android:name="com.xreal.sdk.GLASSES_MODE"
+            android:value="true" />
+    </application>
+</manifest>

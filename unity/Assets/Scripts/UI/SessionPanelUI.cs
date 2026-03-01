@@ -160,8 +160,10 @@ namespace VibeReal.UI
 
             // Auto-scroll to bottom
             if (scrollRect != null)
+            {
                 Canvas.ForceUpdateCanvases();
                 scrollRect.verticalNormalizedPosition = 0f;
+            }
         }
 
         private void ShowApproval(ApprovalData approval)
