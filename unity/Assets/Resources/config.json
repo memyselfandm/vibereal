@@ -1,0 +1,17 @@
+{
+  "hubUrl": "ws://192.168.1.100:8080/client",
+  "apiKey": "",
+  "languageCode": "en-US",
+  "speechRate": 1.1,
+  "pitch": 1.0,
+  "maxTtsWords": 50,
+  "summarizeLongResponses": true,
+  "reconnectDelaySeconds": 5.0,
+  "maxReconnectDelaySeconds": 60.0,
+  "maxReconnectAttempts": 10,
+  "panelDistance": 1.5,
+  "panelWidth": 0.6,
+  "panelHeight": 0.4,
+  "listeningTimeoutSeconds": 10.0,
+  "silenceThresholdSeconds": 1.5
+}
