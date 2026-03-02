@@ -78,9 +78,65 @@ VibeReal is a spatial computing application that provides a hands-free, voice-co
 - XREAL Beam Pro
 - Server with Docker (for containerized sessions)
 
-## Getting Started
+## Unity App (MVP)
 
-*Coming soon - implementation in progress*
+The `unity/` folder contains a complete scaffolded Unity project for the XREAL AR app.
+
+### What's Implemented
+
+| Component | Scripts | Description |
+|-----------|---------|-------------|
+| **Core** | `WebSocketClient.cs`, `VoiceManager.cs`, `SessionManager.cs`, `NotificationManager.cs`, `AppBootstrap.cs`, `InputHandler.cs` | Business logic and coordination |
+| **Voice** | `AndroidSTT.cs`, `AndroidTTS.cs` | Native Android speech recognition and text-to-speech via JNI |
+| **UI** | `SessionPanelController.cs`, `ApprovalDialogController.cs`, `StatusIndicator.cs` | UI controllers for spatial panels |
+| **Data** | `Session.cs`, `HubMessages.cs`, `AppConfig.cs` | Data models matching hub WebSocket protocol |
+
+### Key Features
+- Push-to-talk voice input using Android SpeechRecognizer
+- TTS output with priority queue and markdown stripping
+- WebSocket connection with auto-reconnect
+- Session state tracking and approval workflow
+- Controller input handling for Beam Pro
+
+### Quick Start
+
+1. Open `unity/` in Unity 2022.3 LTS
+2. Import XREAL SDK 3.1.0+ from [developer.xreal.com](https://developer.xreal.com/download/)
+3. Configure XR Plug-in Management → Enable XREAL
+4. Create scene following `unity/README.md` instructions
+5. Build → Android → APK
+6. `adb install VibeReal.apk`
+
+See [unity/README.md](unity/README.md) for detailed setup instructions.
+
+### Configuration
+
+Edit `unity/Assets/Resources/config.json`:
+```json
+{
+  "hubUrl": "ws://YOUR_SERVER_IP:8080/client",
+  "apiKey": "your-api-key"
+}
+```
+
+## Project Structure
+
+```
+vibereal/
+├── specs/                    # Detailed specifications
+│   ├── 01-session-hub.md
+│   ├── 02-external-integrations.md
+│   ├── 03-xreal-unity-app.md
+│   ├── 04-container-manager.md
+│   └── 05-voice-interface.md
+└── unity/                    # Unity project (MVP)
+    ├── Assets/
+    │   ├── Scripts/          # C# source code
+    │   ├── Plugins/Android/  # Android manifest
+    │   └── Resources/        # Runtime config
+    ├── Packages/             # Package manifest
+    └── ProjectSettings/      # Unity settings
+```
 
 ## License
 
