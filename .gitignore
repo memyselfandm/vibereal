@@ -1,0 +1,19 @@
+# Unity
+unity/Library/
+unity/Temp/
+unity/Obj/
+unity/Build/
+unity/Builds/
+unity/Logs/
+unity/UserSettings/
+unity/.utmp/
+unity/.vscode/
+unity/*.slnx
+unity/*.sln
+unity/*.csproj
+
+# Build artifacts
+*.apk
+
+# OS
+.DS_Store

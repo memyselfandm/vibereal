@@ -1,14 +1,14 @@
 {
-    "name": "VibeReal",
-    "rootNamespace": "VibeReal",
+    "name": "VibeReal.Editor",
+    "rootNamespace": "VibeReal.Editor",
     "references": [
+        "VibeReal",
         "Unity.TextMeshPro",
-        "Unity.InputSystem",
-        "Unity.XR.Interaction.Toolkit",
-        "Unity.XR.Management",
-        "endel.nativewebsocket"
+        "Unity.XR.Interaction.Toolkit"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

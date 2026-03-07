@@ -116,9 +116,8 @@ namespace VibeReal.Voice
                     _tts.Call<int>("setSpeechRate", speechRate);
                     _tts.Call<int>("setPitch", pitch);
 
-                    // Set utterance progress listener
-                    var progressListener = new TTSProgressListener(this);
-                    _tts.Call<int>("setOnUtteranceProgressListener", progressListener);
+                    // Note: UtteranceProgressListener is an abstract class, not an interface,
+                    // so AndroidJavaProxy cannot proxy it. Speech callbacks are not available.
 
                     IsInitialized = true;
                     Debug.Log("AndroidTTS initialized successfully");

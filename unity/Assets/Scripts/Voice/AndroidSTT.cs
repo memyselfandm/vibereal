@@ -68,54 +68,60 @@ namespace VibeReal.Voice
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
-                // Get Unity activity
                 using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
                 {
                     _activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
                 }
 
-                // Check if speech recognition is available
-                using (var speechRecognizerClass = new AndroidJavaClass("android.speech.SpeechRecognizer"))
+                // SpeechRecognizer must be created on the Android UI thread
+                _activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                 {
-                    bool isAvailable = speechRecognizerClass.CallStatic<bool>("isRecognitionAvailable", _activity);
-                    if (!isAvailable)
+                    try
                     {
-                        Debug.LogError("Speech recognition not available on this device");
-                        OnError?.Invoke(SpeechError.Client);
-                        return;
+                        using (var speechRecognizerClass = new AndroidJavaClass("android.speech.SpeechRecognizer"))
+                        {
+                            bool isAvailable = speechRecognizerClass.CallStatic<bool>("isRecognitionAvailable", _activity);
+                            if (!isAvailable)
+                            {
+                                Debug.LogError("Speech recognition not available on this device");
+                                MainThreadDispatcher.Enqueue(() => OnError?.Invoke(SpeechError.Client));
+                                return;
+                            }
+
+                            _speechRecognizer = speechRecognizerClass.CallStatic<AndroidJavaObject>("createSpeechRecognizer", _activity);
+                        }
+
+                        var listener = new SpeechRecognitionListener(this);
+                        _speechRecognizer.Call("setRecognitionListener", listener);
+
+                        using (var recognizerIntentClass = new AndroidJavaClass("android.speech.RecognizerIntent"))
+                        {
+                            string actionRecognizeSpeech = recognizerIntentClass.GetStatic<string>("ACTION_RECOGNIZE_SPEECH");
+                            _recognizerIntent = new AndroidJavaObject("android.content.Intent", actionRecognizeSpeech);
+
+                            string extraLanguageModel = recognizerIntentClass.GetStatic<string>("EXTRA_LANGUAGE_MODEL");
+                            string languageModelFreeForm = recognizerIntentClass.GetStatic<string>("LANGUAGE_MODEL_FREE_FORM");
+                            _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraLanguageModel, languageModelFreeForm);
+
+                            string extraLanguage = recognizerIntentClass.GetStatic<string>("EXTRA_LANGUAGE");
+                            _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraLanguage, languageCode);
+
+                            string extraMaxResults = recognizerIntentClass.GetStatic<string>("EXTRA_MAX_RESULTS");
+                            _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraMaxResults, maxAlternatives);
+
+                            string extraPartialResults = recognizerIntentClass.GetStatic<string>("EXTRA_PARTIAL_RESULTS");
+                            _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraPartialResults, true);
+                        }
+
+                        IsInitialized = true;
+                        Debug.Log("AndroidSTT initialized");
                     }
-
-                    // Create speech recognizer
-                    _speechRecognizer = speechRecognizerClass.CallStatic<AndroidJavaObject>("createSpeechRecognizer", _activity);
-                }
-
-                // Create recognition listener
-                var listener = new SpeechRecognitionListener(this);
-                _speechRecognizer.Call("setRecognitionListener", listener);
-
-                // Create intent for speech recognition
-                using (var intentClass = new AndroidJavaClass("android.content.Intent"))
-                using (var recognizerIntentClass = new AndroidJavaClass("android.speech.RecognizerIntent"))
-                {
-                    string actionRecognizeSpeech = recognizerIntentClass.GetStatic<string>("ACTION_RECOGNIZE_SPEECH");
-                    _recognizerIntent = new AndroidJavaObject("android.content.Intent", actionRecognizeSpeech);
-
-                    string extraLanguageModel = recognizerIntentClass.GetStatic<string>("EXTRA_LANGUAGE_MODEL");
-                    string languageModelFreeForm = recognizerIntentClass.GetStatic<string>("LANGUAGE_MODEL_FREE_FORM");
-                    _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraLanguageModel, languageModelFreeForm);
-
-                    string extraLanguage = recognizerIntentClass.GetStatic<string>("EXTRA_LANGUAGE");
-                    _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraLanguage, languageCode);
-
-                    string extraMaxResults = recognizerIntentClass.GetStatic<string>("EXTRA_MAX_RESULTS");
-                    _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraMaxResults, maxAlternatives);
-
-                    string extraPartialResults = recognizerIntentClass.GetStatic<string>("EXTRA_PARTIAL_RESULTS");
-                    _recognizerIntent.Call<AndroidJavaObject>("putExtra", extraPartialResults, true);
-                }
-
-                IsInitialized = true;
-                Debug.Log("AndroidSTT initialized");
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Failed to initialize speech recognizer on UI thread: {ex.Message}");
+                        MainThreadDispatcher.Enqueue(() => OnError?.Invoke(SpeechError.Client));
+                    }
+                }));
             }
             catch (Exception ex)
             {
