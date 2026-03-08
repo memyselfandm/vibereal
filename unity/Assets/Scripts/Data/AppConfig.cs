@@ -30,6 +30,11 @@ namespace VibeReal.Data
         public float panelWidth = 0.6f;
         public float panelHeight = 0.4f;
 
+        // ElevenLabs
+        public string elevenLabsApiKey = "";
+        public string elevenLabsVoiceId = "C92s6vssSLlabgIln1iY";
+        public string elevenLabsModelId = "eleven_turbo_v2_5";
+
         // Timeouts
         public float listeningTimeoutSeconds = 10f;
         public float silenceThresholdSeconds = 1.5f;
@@ -53,6 +58,14 @@ namespace VibeReal.Data
             {
                 Debug.LogWarning("config.json not found in Resources, using defaults");
                 _instance = new AppConfig();
+            }
+
+            // Overlay secrets from gitignored config.secrets.json
+            var secretsAsset = Resources.Load<TextAsset>("config.secrets");
+            if (secretsAsset != null)
+            {
+                JsonUtility.FromJsonOverwrite(secretsAsset.text, _instance);
+                Debug.Log("Loaded config secrets overlay");
             }
 
             return _instance;

@@ -8,7 +8,7 @@ namespace VibeReal.Voice
     /// Android Text-to-Speech wrapper using native TextToSpeech API.
     /// Supports queuing, priority, and speech rate/pitch control.
     /// </summary>
-    public class AndroidTTS : MonoBehaviour
+    public class AndroidTTS : MonoBehaviour, ITTS
     {
         [Header("Settings")]
         [SerializeField] private string languageCode = "en-US";
@@ -33,18 +33,10 @@ namespace VibeReal.Voice
         private AndroidJavaObject _activity;
 #endif
 
-        public enum Priority
-        {
-            Low,
-            Normal,
-            High,
-            Urgent
-        }
-
         private struct SpeechItem
         {
             public string text;
-            public Priority priority;
+            public SpeechPriority priority;
             public string utteranceId;
         }
 
@@ -140,7 +132,7 @@ namespace VibeReal.Voice
         /// <summary>
         /// Speak text immediately (flushes queue for High/Urgent priority)
         /// </summary>
-        public void Speak(string text, Priority priority = Priority.Normal)
+        public void Speak(string text, SpeechPriority priority = SpeechPriority.Normal)
         {
             if (string.IsNullOrEmpty(text)) return;
 
@@ -156,14 +148,14 @@ namespace VibeReal.Voice
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
-                int queueMode = (priority >= Priority.High) ? 0 : 1; // QUEUE_FLUSH = 0, QUEUE_ADD = 1
+                int queueMode = (priority >= SpeechPriority.High) ? 0 : 1; // QUEUE_FLUSH = 0, QUEUE_ADD = 1
 
                 using (var bundle = new AndroidJavaObject("android.os.Bundle"))
                 {
                     _tts.Call<int>("speak", text, queueMode, bundle, utteranceId);
                 }
 
-                if (priority >= Priority.High)
+                if (priority >= SpeechPriority.High)
                 {
                     _speechQueue.Clear();
                 }
@@ -207,7 +199,7 @@ namespace VibeReal.Voice
         /// <summary>
         /// Queue text to speak after current speech
         /// </summary>
-        public void QueueSpeak(string text, Priority priority = Priority.Normal)
+        public void QueueSpeak(string text, SpeechPriority priority = SpeechPriority.Normal)
         {
             _speechQueue.Enqueue(new SpeechItem
             {

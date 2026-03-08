@@ -1,0 +1,9 @@
+services:
+  hub:
+    build: .
+    ports:
+      - "41237:8080"
+    environment:
+      - PORT=8080
+      - HUB_API_KEY=${HUB_API_KEY:-}
+    restart: unless-stopped

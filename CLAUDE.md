@@ -8,9 +8,9 @@ VibeReal is a JARVIS-like AR interface for managing Claude Code sessions through
 
 ## Architecture
 
-The system has two main parts, with only the Unity app currently implemented:
+The system has two main parts:
 
-1. **Session Hub** (Node.js/Bun, not yet implemented) - Central server handling WebSocket connections, voice command NLU, session registry, notification management, and external integrations (n8n, Home Assistant, Slack)
+1. **Session Hub** (`hub/`, Node.js) - WebSocket server that relays messages between Claude Code sessions and UI clients. Includes a web test UI and session simulator.
 2. **XREAL Unity App** (`unity/`) - AR frontend with spatial UI panels, voice controls (Android STT/TTS via JNI), and WebSocket client that connects to the Session Hub
 
 The Unity app communicates with the Session Hub over WebSocket using a JSON message protocol defined in `unity/Assets/Scripts/Data/HubMessages.cs`. Messages are typed via a `type` field and parsed by `HubMessageParser`.
@@ -37,6 +37,36 @@ Canvas                      - World Space, root-level (NOT parented to camera), 
   SessionPanel              - Session name, status, conversation scroll, PTT indicator
   ApprovalDialog            - Hidden by default, shown for approval requests
 ```
+
+## Session Hub (`hub/`)
+
+### Structure
+- `src/index.ts` - HTTP server + WebSocket upgrade routing
+- `src/config.ts` - Env var loader (PORT, HUB_API_KEY)
+- `src/types.ts` - TypeScript types mirroring `HubMessages.cs`
+- `src/session-registry.ts` - In-memory session store
+- `src/client-manager.ts` - Connected UI client tracking
+- `src/message-router.ts` - Routes messages between sessions and clients
+- `src/handlers/` - WebSocket connection handlers for clients and sessions
+- `public/index.html` - Web test UI (single file, no build step)
+- `tools/session-sim.ts` - CLI session simulator for testing
+
+### Running
+```bash
+cd hub && npm install
+npm run dev          # Start with --watch
+npm run sim          # Run demo simulator (set PORT= to match)
+```
+
+### WebSocket Protocol
+- Sessions connect on `/session/:id` and send `register`, `status_update`, `response_chunk`, `approval_request`
+- Clients connect on `/client` and send `list_sessions`, `send_message`, `approval_decision`, `set_focus`
+- Hub relays session events to all clients as `session_update`, `claude_response`, `notification`
+- Types defined in `src/types.ts`, mirroring `unity/Assets/Scripts/Data/HubMessages.cs`
+
+### Environment
+- `PORT` - Server port (default: 8080)
+- `HUB_API_KEY` - Optional API key for client auth (header, query param, or subprotocol)
 
 ## Development
 

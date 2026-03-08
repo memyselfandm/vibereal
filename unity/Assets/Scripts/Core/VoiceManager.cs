@@ -13,9 +13,10 @@ namespace VibeReal.Core
     public class VoiceManager : MonoBehaviour
     {
         [Header("References")]
-        [SerializeField] private AndroidSTT stt;
-        [SerializeField] private AndroidTTS tts;
         [SerializeField] private WebSocketClient webSocketClient;
+
+        private ISTT stt;
+        private ITTS tts;
 
         [Header("Settings")]
         [SerializeField] private float listeningTimeout = 10f;
@@ -55,9 +56,27 @@ namespace VibeReal.Core
             maxTtsWords = config.maxTtsWords;
             summarizeLongResponses = config.summarizeLongResponses;
 
-            // Get references if not set
-            if (stt == null) stt = GetComponent<AndroidSTT>() ?? gameObject.AddComponent<AndroidSTT>();
-            if (tts == null) tts = GetComponent<AndroidTTS>() ?? gameObject.AddComponent<AndroidTTS>();
+            // Discover voice components — prefer ElevenLabs, fall back to Android native
+            bool useElevenLabs = !string.IsNullOrEmpty(config.elevenLabsApiKey);
+
+            if (stt == null) stt = GetComponent<ISTT>();
+            if (stt == null)
+            {
+                if (useElevenLabs)
+                    stt = gameObject.AddComponent<ElevenLabsSTT>();
+                else
+                    stt = gameObject.AddComponent<AndroidSTT>();
+            }
+
+            if (tts == null) tts = GetComponent<ITTS>();
+            if (tts == null)
+            {
+                if (useElevenLabs)
+                    tts = gameObject.AddComponent<ElevenLabsTTS>();
+                else
+                    tts = gameObject.AddComponent<AndroidTTS>();
+            }
+
             if (webSocketClient == null) webSocketClient = FindObjectOfType<WebSocketClient>();
 
             // Subscribe to STT events
@@ -160,7 +179,7 @@ namespace VibeReal.Core
         /// <summary>
         /// Speak text using TTS
         /// </summary>
-        public void Speak(string text, AndroidTTS.Priority priority = AndroidTTS.Priority.Normal)
+        public void Speak(string text, SpeechPriority priority = SpeechPriority.Normal)
         {
             if (string.IsNullOrEmpty(text)) return;
 
@@ -177,9 +196,9 @@ namespace VibeReal.Core
         {
             var priority = notification.priority switch
             {
-                "critical" => AndroidTTS.Priority.Urgent,
-                "high" => AndroidTTS.Priority.High,
-                _ => AndroidTTS.Priority.Normal
+                "critical" => SpeechPriority.Urgent,
+                "high" => SpeechPriority.High,
+                _ => SpeechPriority.Normal
             };
 
             var text = !string.IsNullOrEmpty(notification.voiceText)
@@ -239,17 +258,17 @@ namespace VibeReal.Core
             OnListeningStopped?.Invoke();
         }
 
-        private void HandleSttError(AndroidSTT.SpeechError error)
+        private void HandleSttError(SpeechError error)
         {
             Debug.LogError($"STT error: {error}");
 
             string errorMessage = error switch
             {
-                AndroidSTT.SpeechError.NoMatch => "I didn't catch that. Try again.",
-                AndroidSTT.SpeechError.Network or AndroidSTT.SpeechError.NetworkTimeout =>
+                SpeechError.NoMatch => "I didn't catch that. Try again.",
+                SpeechError.Network or SpeechError.NetworkTimeout =>
                     "Network error. Check your connection.",
-                AndroidSTT.SpeechError.Audio => "Audio error. Check microphone.",
-                AndroidSTT.SpeechError.SpeechTimeout => "I didn't hear anything.",
+                SpeechError.Audio => "Audio error. Check microphone.",
+                SpeechError.SpeechTimeout => "I didn't hear anything.",
                 _ => "Voice recognition error."
             };
 
@@ -257,8 +276,8 @@ namespace VibeReal.Core
             SetState(VoiceState.Idle);
 
             // Speak error if not a timeout
-            if (error != AndroidSTT.SpeechError.SpeechTimeout &&
-                error != AndroidSTT.SpeechError.NoMatch)
+            if (error != SpeechError.SpeechTimeout &&
+                error != SpeechError.NoMatch)
             {
                 Speak(errorMessage);
             }

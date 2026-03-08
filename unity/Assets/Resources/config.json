@@ -1,5 +1,5 @@
 {
-  "hubUrl": "ws://192.168.1.100:8080/client",
+  "hubUrl": "ws://10.41.41.237:41237/client",
   "apiKey": "",
   "languageCode": "en-US",
   "speechRate": 1.1,
@@ -13,5 +13,8 @@
   "panelWidth": 0.6,
   "panelHeight": 0.4,
   "listeningTimeoutSeconds": 10.0,
-  "silenceThresholdSeconds": 1.5
+  "silenceThresholdSeconds": 1.5,
+  "elevenLabsApiKey": "",
+  "elevenLabsVoiceId": "C92s6vssSLlabgIln1iY",
+  "elevenLabsModelId": "eleven_turbo_v2_5"
 }

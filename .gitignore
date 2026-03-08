@@ -15,5 +15,13 @@ unity/*.csproj
 # Build artifacts
 *.apk
 
+# Hub
+hub/node_modules/
+hub/.env
+
+# Secrets
+unity/Assets/Resources/config.secrets.json
+unity/Assets/Resources/config.secrets.json.meta
+
 # OS
 .DS_Store

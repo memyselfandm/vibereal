@@ -1,0 +1,17 @@
+{
+  "name": "vibereal-hub",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-transform-types --watch src/index.ts",
+    "start": "node --experimental-transform-types src/index.ts",
+    "sim": "node --experimental-transform-types tools/session-sim.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "@types/node": "^22.0.0"
+  }
+}

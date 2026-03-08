@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VibeReal — Session Hub</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --cyan: #39d2c0;
+    --orange: #db6d28;
+    --red: #f85149;
+    --gray: #484f58;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---- Header ---- */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .header .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+  }
+  .header .status-dot.connected { background: var(--green); }
+  .header .status-text { font-size: 13px; color: var(--text-muted); }
+  .header .session-count { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .header .time { font-size: 13px; color: var(--text-muted); }
+
+  /* ---- Connect bar ---- */
+  .connect-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .connect-bar input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 200px;
+  }
+  .connect-bar button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .connect-bar button:hover { opacity: 0.9; }
+  .connect-bar button.disconnect { background: var(--red); }
+
+  /* ---- Main layout ---- */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .sidebar h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 12px 12px 8px;
+    letter-spacing: 0.5px;
+  }
+  .session-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.15s;
+  }
+  .session-item:hover { background: rgba(255,255,255,0.04); }
+  .session-item.active {
+    background: rgba(88,166,255,0.08);
+    border-left-color: var(--accent);
+  }
+  .session-item .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .session-item .name {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .session-item .task {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  .no-sessions {
+    padding: 20px 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* ---- Detail panel ---- */
+  .detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .detail-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .detail-header .session-name { font-size: 16px; font-weight: 600; }
+  .detail-header .session-status {
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  /* ---- Conversation ---- */
+  .conversation {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .msg {
+    margin-bottom: 12px;
+    max-width: 80%;
+  }
+  .msg.user { margin-left: auto; }
+  .msg .bubble {
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant .bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .msg .sender {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+
+  /* ---- Message input ---- */
+  .input-bar {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .input-bar input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .input-bar input:focus { outline: none; border-color: var(--accent); }
+  .input-bar button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  /* ---- Approval dialog ---- */
+  .approval {
+    margin: 8px 16px;
+    padding: 12px 16px;
+    background: rgba(219,109,40,0.1);
+    border: 1px solid var(--orange);
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .approval .title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--orange);
+    margin-bottom: 4px;
+  }
+  .approval .desc {
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 10px;
+    font-family: monospace;
+  }
+  .approval .actions {
+    display: flex;
+    gap: 8px;
+  }
+  .approval .actions button {
+    padding: 6px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+  }
+  .approval .btn-approve { background: var(--green); }
+  .approval .btn-deny { background: var(--red); }
+
+  /* ---- Empty state ---- */
+  .empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Status colors */
+  .status-idle { background: var(--green); }
+  .status-thinking { background: var(--yellow); }
+  .status-executing { background: var(--cyan); }
+  .status-waiting_input { background: var(--orange); }
+  .status-error { background: var(--red); }
+  .status-disconnected { background: var(--gray); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="status-dot" id="connDot"></div>
+  <span class="status-text" id="connText">Disconnected</span>
+  <span class="session-count" id="sessionCount">0 Sessions</span>
+  <span class="time" id="clock"></span>
+</div>
+
+<div class="connect-bar">
+  <input type="text" id="apiKeyInput" placeholder="API Key (optional)">
+  <button id="connectBtn" onclick="toggleConnection()">Connect</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <h3>Sessions</h3>
+    <div id="sessionList">
+      <div class="no-sessions">No sessions</div>
+    </div>
+  </div>
+
+  <div class="detail" id="detailPanel">
+    <div class="empty-state" id="emptyState">Select a session to view details</div>
+  </div>
+</div>
+
+<script>
+// ==================== State ====================
+let ws = null;
+let connected = false;
+let sessions = {};       // id → { id, name, status, currentTask, type }
+let focusedId = null;
+let conversations = {};  // id → [ { role, content } ]
+let approvals = {};      // id → [ { approvalId, toolName, description } ]
+let reconnectTimer = null;
+let reconnectDelay = 2000;
+
+// ==================== Clock ====================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ==================== Connection ====================
+function toggleConnection() {
+  if (connected) {
+    if (ws) ws.close();
+  } else {
+    connect();
+  }
+}
+
+function connect() {
+  if (ws && ws.readyState < 2) return;
+  clearTimeout(reconnectTimer);
+
+  const apiKey = document.getElementById('apiKeyInput').value;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let url = `${proto}//${location.host}/client`;
+  if (apiKey) url += `?apiKey=${encodeURIComponent(apiKey)}`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    connected = true;
+    reconnectDelay = 2000;
+    updateConnectionUI();
+    // Request session list
+    ws.send(JSON.stringify({ type: 'list_sessions', requestId: rid() }));
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleMessage(msg);
+  };
+
+  ws.onerror = () => {};
+
+  ws.onclose = () => {
+    connected = false;
+    updateConnectionUI();
+    // Auto-reconnect
+    reconnectTimer = setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
+      connect();
+    }, reconnectDelay);
+  };
+}
+
+function updateConnectionUI() {
+  const dot = document.getElementById('connDot');
+  const text = document.getElementById('connText');
+  const btn = document.getElementById('connectBtn');
+  dot.className = 'status-dot' + (connected ? ' connected' : '');
+  text.textContent = connected ? 'Connected' : 'Disconnected';
+  btn.textContent = connected ? 'Disconnect' : 'Connect';
+  btn.className = connected ? 'disconnect' : '';
+}
+
+function rid() { return Math.random().toString(36).slice(2, 10); }
+
+// ==================== Message Handling ====================
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'session_list':
+      sessions = {};
+      (msg.sessions || []).forEach(s => { sessions[s.id] = s; });
+      renderSidebar();
+      if (focusedId && sessions[focusedId]) renderDetail();
+      break;
+
+    case 'session_update':
+      if (!sessions[msg.sessionId]) {
+        sessions[msg.sessionId] = { id: msg.sessionId, name: msg.sessionId, type: 'claude_code' };
+      }
+      sessions[msg.sessionId].status = msg.status;
+      sessions[msg.sessionId].currentTask = msg.currentTask;
+      renderSidebar();
+      if (focusedId === msg.sessionId) renderDetail();
+      break;
+
+    case 'claude_response':
+      if (!conversations[msg.sessionId]) conversations[msg.sessionId] = [];
+      const convo = conversations[msg.sessionId];
+      // Append to last assistant message or create new one
+      if (convo.length > 0 && convo[convo.length - 1].role === 'assistant' && !convo[convo.length - 1].complete) {
+        convo[convo.length - 1].content += msg.content;
+        convo[convo.length - 1].complete = msg.isComplete;
+      } else {
+        convo.push({ role: 'assistant', content: msg.content, complete: msg.isComplete });
+      }
+      if (focusedId === msg.sessionId) renderDetail();
+      break;
+
+    case 'notification':
+      const n = msg.notification;
+      if (n.type === 'approval_required') {
+        if (!approvals[n.sessionId]) approvals[n.sessionId] = [];
+        approvals[n.sessionId].push({
+          approvalId: n.id,
+          toolName: n.title.replace('Approval: ', ''),
+          description: n.body,
+        });
+        if (focusedId === n.sessionId) renderDetail();
+      }
+      break;
+
+    case 'error':
+      console.error(`Hub error [${msg.code}]: ${msg.message}`);
+      break;
+  }
+  updateSessionCount();
+}
+
+function updateSessionCount() {
+  const count = Object.keys(sessions).length;
+  document.getElementById('sessionCount').textContent = `${count} Session${count !== 1 ? 's' : ''}`;
+}
+
+// ==================== Sidebar ====================
+function renderSidebar() {
+  const el = document.getElementById('sessionList');
+  const ids = Object.keys(sessions);
+  if (ids.length === 0) {
+    el.innerHTML = '<div class="no-sessions">No sessions</div>';
+    return;
+  }
+  el.innerHTML = ids.map(id => {
+    const s = sessions[id];
+    const active = id === focusedId ? ' active' : '';
+    const statusClass = 'status-' + (s.status || 'disconnected');
+    return `<div class="session-item${active}" onclick="focusSession('${id}')">
+      <div class="dot ${statusClass}"></div>
+      <div>
+        <span class="name">${esc(s.name || id)}</span>
+        <span class="task">${esc(s.currentTask || s.status || '')}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function focusSession(id) {
+  focusedId = id;
+  if (ws && connected) {
+    ws.send(JSON.stringify({ type: 'set_focus', requestId: rid(), sessionId: id }));
+  }
+  renderSidebar();
+  renderDetail();
+}
+
+// ==================== Detail Panel ====================
+function renderDetail() {
+  const panel = document.getElementById('detailPanel');
+  if (!focusedId || !sessions[focusedId]) {
+    panel.innerHTML = '<div class="empty-state">Select a session to view details</div>';
+    return;
+  }
+  const s = sessions[focusedId];
+  const convo = conversations[focusedId] || [];
+  const apprs = approvals[focusedId] || [];
+  const statusClass = 'status-' + (s.status || 'disconnected');
+
+  let html = `
+    <div class="detail-header">
+      <div class="session-name">${esc(s.name || s.id)}</div>
+      <div class="session-status">
+        <div class="dot ${statusClass}" style="width:8px;height:8px;border-radius:50%;"></div>
+        ${esc(s.status || 'unknown')}${s.currentTask ? ' — ' + esc(s.currentTask) : ''}
+      </div>
+    </div>
+    <div class="conversation" id="convoScroll">`;
+
+  convo.forEach(m => {
+    const cls = m.role === 'user' ? 'user' : 'assistant';
+    html += `<div class="msg ${cls}">
+      <div class="sender">${m.role === 'user' ? 'You' : 'Claude'}</div>
+      <div class="bubble">${esc(m.content)}</div>
+    </div>`;
+  });
+
+  html += '</div>';
+
+  // Approval dialogs
+  apprs.forEach(a => {
+    html += `<div class="approval">
+      <div class="title">Approval Required: ${esc(a.toolName)}</div>
+      <div class="desc">${esc(a.description)}</div>
+      <div class="actions">
+        <button class="btn-approve" onclick="decide('${focusedId}','${a.approvalId}','approve')">Approve</button>
+        <button class="btn-deny" onclick="decide('${focusedId}','${a.approvalId}','deny')">Deny</button>
+      </div>
+    </div>`;
+  });
+
+  html += `<div class="input-bar">
+    <input type="text" id="msgInput" placeholder="Send a message..." onkeydown="if(event.key==='Enter')sendMsg()">
+    <button onclick="sendMsg()">Send</button>
+  </div>`;
+
+  panel.innerHTML = html;
+
+  // Scroll conversation to bottom
+  const scroll = document.getElementById('convoScroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+}
+
+// ==================== Actions ====================
+function sendMsg() {
+  const input = document.getElementById('msgInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !focusedId || !connected) return;
+
+  // Add to local conversation
+  if (!conversations[focusedId]) conversations[focusedId] = [];
+  conversations[focusedId].push({ role: 'user', content: text, complete: true });
+
+  ws.send(JSON.stringify({
+    type: 'send_message',
+    requestId: rid(),
+    sessionId: focusedId,
+    message: { role: 'user', content: text },
+  }));
+
+  input.value = '';
+  renderDetail();
+}
+
+function decide(sessionId, approvalId, decision) {
+  if (!connected) return;
+  ws.send(JSON.stringify({
+    type: 'approval_decision',
+    requestId: rid(),
+    sessionId,
+    approvalId,
+    decision,
+  }));
+  // Remove from local approvals
+  if (approvals[sessionId]) {
+    approvals[sessionId] = approvals[sessionId].filter(a => a.approvalId !== approvalId);
+  }
+  renderDetail();
+}
+
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

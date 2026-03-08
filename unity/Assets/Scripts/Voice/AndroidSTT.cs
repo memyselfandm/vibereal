@@ -7,7 +7,7 @@ namespace VibeReal.Voice
     /// Android Speech-to-Text wrapper using native SpeechRecognizer API.
     /// Provides push-to-talk voice recognition.
     /// </summary>
-    public class AndroidSTT : MonoBehaviour
+    public class AndroidSTT : MonoBehaviour, ISTT
     {
         [Header("Settings")]
         [SerializeField] private string languageCode = "en-US";
@@ -30,20 +30,6 @@ namespace VibeReal.Voice
         private AndroidJavaObject _recognizerIntent;
         private AndroidJavaObject _activity;
 #endif
-
-        public enum SpeechError
-        {
-            Unknown = 0,
-            NetworkTimeout = 1,
-            Network = 2,
-            Audio = 3,
-            Server = 4,
-            Client = 5,
-            SpeechTimeout = 6,
-            NoMatch = 7,
-            RecognizerBusy = 8,
-            InsufficientPermissions = 9
-        }
 
         private void Start()
         {

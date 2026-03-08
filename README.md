@@ -119,17 +119,42 @@ Edit `unity/Assets/Resources/config.json`:
 }
 ```
 
+## Session Hub (MVP)
+
+The `hub/` folder contains a lightweight WebSocket relay server with a web test UI.
+
+### Quick Start
+
+```bash
+cd hub && npm install
+npm run dev                      # Start hub (default port 8080)
+# Open http://localhost:8080     # Web test UI
+npm run sim                      # Run demo simulator in another terminal
+```
+
+Set `PORT=8090` to use a different port. Set `HUB_API_KEY=secret` to enable client auth.
+
+### How It Works
+
+- Sessions (Claude Code instances) connect to `ws://host:port/session/{id}` and send status updates
+- Clients (Unity app or web UI) connect to `ws://host:port/client` and receive relayed events
+- Hub routes messages between them — session status, responses, and approval requests
+
 ## Project Structure
 
 ```
 vibereal/
+├── hub/                      # Session Hub server (Node.js)
+│   ├── src/                  # TypeScript source
+│   ├── public/               # Web test UI
+│   └── tools/                # Session simulator
 ├── specs/                    # Detailed specifications
 │   ├── 01-session-hub.md
 │   ├── 02-external-integrations.md
 │   ├── 03-xreal-unity-app.md
 │   ├── 04-container-manager.md
 │   └── 05-voice-interface.md
-└── unity/                    # Unity project (MVP)
+└── unity/                    # Unity project (XREAL AR app)
     ├── Assets/
     │   ├── Scripts/          # C# source code
     │   ├── Plugins/Android/  # Android manifest
