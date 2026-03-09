@@ -23,6 +23,21 @@ export function register(
   return record;
 }
 
+export function registerManaged(id: string, name: string): SessionRecord {
+  const record: SessionRecord = {
+    id,
+    name,
+    type: "managed",
+    status: "starting",
+    currentTask: "",
+    ws: null,
+    lastActivity: new Date(),
+    pendingApprovals: [],
+  };
+  sessions.set(id, record);
+  return record;
+}
+
 export function unregister(id: string): void {
   sessions.delete(id);
 }

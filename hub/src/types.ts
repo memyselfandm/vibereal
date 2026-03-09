@@ -137,3 +137,19 @@ export interface ClientConnection {
   ws: import("ws").WebSocket;
   focusedSessionId: string | null;
 }
+
+// ==================== REST API ====================
+
+export interface CreateSessionRequest {
+  prompt: string;
+  workingDirectory?: string;
+  name?: string;
+  allowedTools?: string[];
+  permissionMode?: string;
+}
+
+export interface CreateSessionResponse {
+  sessionId: string;
+  name: string;
+  status: string;
+}

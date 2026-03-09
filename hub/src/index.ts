@@ -8,6 +8,10 @@ import * as sessionRegistry from "./session-registry.ts";
 import * as clientManager from "./client-manager.ts";
 import { onSessionOpen, onSessionMessage, onSessionClose } from "./handlers/session-handler.ts";
 import { onClientOpen, onClientMessage, onClientClose } from "./handlers/client-handler.ts";
+import { handleApiRequest } from "./api-router.ts";
+import { handleRegistryRequest, startPruning, stopPruning, count as registryCount } from "./hub-registry.ts";
+import * as registryClient from "./hub-registry-client.ts";
+import * as processManager from "./process-manager.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtml = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
@@ -17,6 +21,12 @@ const overlayHtml = readFileSync(join(__dirname, "..", "public", "overlay.html")
 const server = createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
+  // REST API
+  if (handleApiRequest(req, res)) return;
+
+  // Registry API
+  if (handleRegistryRequest(req, res)) return;
+
   // Health check
   if (url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -24,6 +34,8 @@ const server = createServer((req, res) => {
       status: "ok",
       sessions: sessionRegistry.count(),
       clients: clientManager.count(),
+      registry: { hubs: registryCount() },
+      processManager: processManager.isEnabled(),
     }));
     return;
   }
@@ -113,14 +125,44 @@ function setupSessionWs(ws: WebSocket, sessionId: string) {
   });
 }
 
-server.listen(config.port, () => {
-  console.log(`VibeReal Session Hub running on http://localhost:${config.port}`);
-  console.log(`  Web UI:  http://localhost:${config.port}/`);
-  console.log(`  Overlay: http://localhost:${config.port}/overlay`);
-  console.log(`  Health:  http://localhost:${config.port}/health`);
-  console.log(`  Client:  ws://localhost:${config.port}/client`);
-  console.log(`  Session: ws://localhost:${config.port}/session/{id}`);
-  if (!config.apiKey) {
-    console.log(`  Warning: No HUB_API_KEY set — client auth disabled`);
-  }
-});
+// Startup
+async function start() {
+  // Initialize process manager
+  await processManager.initialize();
+
+  server.listen(config.port, () => {
+    console.log(`VibeReal Session Hub running on http://localhost:${config.port}`);
+    console.log(`  Web UI:   http://localhost:${config.port}/`);
+    console.log(`  Overlay:  http://localhost:${config.port}/overlay`);
+    console.log(`  Health:   http://localhost:${config.port}/health`);
+    console.log(`  API:      http://localhost:${config.port}/api/sessions`);
+    console.log(`  Registry: http://localhost:${config.port}/api/registry/hubs`);
+    console.log(`  Client:   ws://localhost:${config.port}/client`);
+    console.log(`  Session:  ws://localhost:${config.port}/session/{id}`);
+    if (!config.apiKey) {
+      console.log(`  Warning: No HUB_API_KEY set — client auth disabled`);
+    }
+    if (processManager.isEnabled()) {
+      console.log(`  Process Manager: enabled`);
+    }
+
+    // Start registry pruning
+    startPruning();
+    // Register with remote registry if configured
+    registryClient.start();
+  });
+}
+
+async function shutdown() {
+  console.log("\nShutting down...");
+  processManager.shutdownAll();
+  stopPruning();
+  await registryClient.stop();
+  server.close();
+  process.exit(0);
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+start();

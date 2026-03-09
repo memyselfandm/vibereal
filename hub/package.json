@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node --experimental-transform-types --watch src/index.ts",
     "start": "node --experimental-transform-types src/index.ts",
-    "sim": "node --experimental-transform-types tools/session-sim.ts"
+    "sim": "node --experimental-transform-types tools/session-sim.ts",
+    "test": "node --experimental-transform-types --test src/tests/*.test.ts"
   },
   "dependencies": {
     "ws": "^8.18.0"

@@ -136,15 +136,34 @@ export function handleClientMessage(ws: WebSocket, raw: string): void {
     case "send_message": {
       const m = msg as SendMessageMessage;
       const session = registry.get(m.sessionId);
-      if (!session?.ws) {
+      if (!session) {
         ws.send(
           JSON.stringify({
             type: "error",
             requestId: m.requestId,
             code: "SESSION_NOT_FOUND",
-            message: `Session ${m.sessionId} not found or disconnected`,
+            message: `Session ${m.sessionId} not found`,
           })
         );
+        return;
+      }
+      // Try managed process first, then WebSocket
+      if (!session.ws) {
+        // Lazy import to avoid circular dependency at module level
+        import("./process-manager.ts").then((pm) => {
+          if (pm.isManaged(m.sessionId)) {
+            pm.sendMessage(m.sessionId, m.message);
+          } else {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                requestId: m.requestId,
+                code: "SESSION_DISCONNECTED",
+                message: `Session ${m.sessionId} is disconnected`,
+              })
+            );
+          }
+        });
         return;
       }
       session.ws.send(
@@ -160,15 +179,33 @@ export function handleClientMessage(ws: WebSocket, raw: string): void {
     case "approval_decision": {
       const m = msg as ApprovalDecisionMessage;
       const session = registry.get(m.sessionId);
-      if (!session?.ws) {
+      if (!session) {
         ws.send(
           JSON.stringify({
             type: "error",
             requestId: m.requestId,
             code: "SESSION_NOT_FOUND",
-            message: `Session ${m.sessionId} not found or disconnected`,
+            message: `Session ${m.sessionId} not found`,
           })
         );
+        return;
+      }
+      // Try managed process first, then WebSocket
+      if (!session.ws) {
+        import("./process-manager.ts").then((pm) => {
+          if (pm.isManaged(m.sessionId)) {
+            pm.sendApprovalDecision(m.sessionId, m.approvalId, m.decision);
+          } else {
+            ws.send(
+              JSON.stringify({
+                type: "error",
+                requestId: m.requestId,
+                code: "SESSION_DISCONNECTED",
+                message: `Session ${m.sessionId} is disconnected`,
+              })
+            );
+          }
+        });
         return;
       }
       registry.removeApproval(m.sessionId, m.approvalId);
