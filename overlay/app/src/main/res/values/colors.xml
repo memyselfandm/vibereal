@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark theme matching the overlay page palette -->
+    <color name="background">#0d1117</color>
+    <color name="surface">#161b22</color>
+    <color name="accent">#58a6ff</color>
+    <color name="text_primary">#e6edf3</color>
+    <color name="text_secondary">#8b949e</color>
+    <color name="text_hint">#484f58</color>
+</resources>

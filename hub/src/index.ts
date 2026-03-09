@@ -11,6 +11,7 @@ import { onClientOpen, onClientMessage, onClientClose } from "./handlers/client-
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtml = readFileSync(join(__dirname, "..", "public", "index.html"), "utf-8");
+const overlayHtml = readFileSync(join(__dirname, "..", "public", "overlay.html"), "utf-8");
 
 // HTTP server
 const server = createServer((req, res) => {
@@ -31,6 +32,13 @@ const server = createServer((req, res) => {
   if (url.pathname === "/" || url.pathname === "/index.html") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(indexHtml);
+    return;
+  }
+
+  // Serve overlay UI
+  if (url.pathname === "/overlay") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(overlayHtml);
     return;
   }
 
@@ -108,6 +116,7 @@ function setupSessionWs(ws: WebSocket, sessionId: string) {
 server.listen(config.port, () => {
   console.log(`VibeReal Session Hub running on http://localhost:${config.port}`);
   console.log(`  Web UI:  http://localhost:${config.port}/`);
+  console.log(`  Overlay: http://localhost:${config.port}/overlay`);
   console.log(`  Health:  http://localhost:${config.port}/health`);
   console.log(`  Client:  ws://localhost:${config.port}/client`);
   console.log(`  Session: ws://localhost:${config.port}/session/{id}`);

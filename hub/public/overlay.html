@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VibeReal — Overlay</title>
+<style>
+  :root {
+    --bg: rgba(13,17,23,0.85);
+    --surface: rgba(22,27,34,0.90);
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --cyan: #39d2c0;
+    --orange: #db6d28;
+    --red: #f85149;
+    --gray: #484f58;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: var(--text);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ---- Status bar ---- */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .conn-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .conn-dot.connected { background: var(--green); }
+  .conn-text {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .session-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+  .clock {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Session switcher ---- */
+  .session-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .session-bar select {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+  }
+  .session-bar select:focus { outline: none; border-color: var(--accent); }
+  .session-bar select option { background: #1c2128; }
+  .session-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--gray);
+    flex-shrink: 0;
+  }
+  .session-task {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+  }
+
+  /* ---- Approval cards ---- */
+  .approvals-area {
+    flex-shrink: 0;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .approval-card {
+    margin: 6px 10px 0;
+    padding: 10px 12px;
+    background: rgba(219,109,40,0.10);
+    border: 1px solid var(--orange);
+    border-radius: 8px;
+  }
+  .approval-card:last-child { margin-bottom: 6px; }
+  .approval-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--orange);
+    margin-bottom: 3px;
+  }
+  .approval-desc {
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 8px;
+    font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .approval-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .approval-actions button {
+    padding: 4px 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+  }
+  .btn-approve { background: var(--green); }
+  .btn-deny { background: var(--red); }
+  .btn-approve:hover { opacity: 0.85; }
+  .btn-deny:hover { opacity: 0.85; }
+
+  /* ---- Conversation ---- */
+  .conversation {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .conversation::-webkit-scrollbar { width: 4px; }
+  .conversation::-webkit-scrollbar-track { background: transparent; }
+  .conversation::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .empty-state {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    margin: auto;
+  }
+  .msg { display: flex; flex-direction: column; max-width: 85%; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: flex-start; align-items: flex-start; }
+  .msg .sender {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+  .msg .bubble {
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 3px;
+  }
+  .msg.assistant .bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 3px;
+  }
+
+  /* ---- Input bar ---- */
+  .input-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .input-bar input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    min-width: 0;
+  }
+  .input-bar input:focus { outline: none; border-color: var(--accent); }
+  .input-bar input::placeholder { color: var(--text-muted); }
+  .btn-send {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .btn-send:hover { opacity: 0.85; }
+  .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---- PTT Mic button ---- */
+  .btn-mic {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .btn-mic:hover { border-color: var(--accent); }
+  .btn-mic.recording {
+    background: rgba(248,81,73,0.20);
+    border-color: var(--red);
+    animation: pulse-mic 0.9s ease-in-out infinite;
+  }
+  .btn-mic svg { pointer-events: none; }
+
+  @keyframes pulse-mic {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248,81,73,0.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(248,81,73,0); }
+  }
+
+  /* ---- Status dot color classes ---- */
+  .status-idle        { background: var(--green); }
+  .status-thinking    { background: var(--yellow); }
+  .status-executing   { background: var(--cyan); }
+  .status-waiting_input { background: var(--orange); }
+  .status-error       { background: var(--red); }
+  .status-disconnected { background: var(--gray); }
+
+  /* ---- Toast notifications ---- */
+  .toast-container {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+    z-index: 9999;
+    pointer-events: none;
+    max-width: 300px;
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text);
+    pointer-events: auto;
+    animation: toast-in 0.2s ease-out;
+    transition: opacity 0.4s ease;
+  }
+  .toast.priority-urgent { border-color: var(--red); }
+  .toast.priority-high   { border-color: var(--orange); }
+  .toast.fading          { opacity: 0; }
+  @keyframes toast-in {
+    from { transform: translateY(8px); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <div class="conn-dot" id="connDot"></div>
+  <span class="conn-text" id="connText">Connecting…</span>
+  <span class="session-count" id="sessionCount">0 Sessions</span>
+  <span class="clock" id="clock"></span>
+</div>
+
+<!-- Session switcher -->
+<div class="session-bar">
+  <div class="session-status-dot" id="sessionStatusDot"></div>
+  <select id="sessionSelect" onchange="onSessionSelectChange()">
+    <option value="">— No sessions —</option>
+  </select>
+  <span class="session-task" id="sessionTask"></span>
+</div>
+
+<!-- Approval cards -->
+<div class="approvals-area" id="approvalsArea"></div>
+
+<!-- Conversation -->
+<div class="conversation" id="convo">
+  <div class="empty-state" id="emptyState">Select a session to begin</div>
+</div>
+
+<!-- Input bar -->
+<div class="input-bar">
+  <button
+    class="btn-mic"
+    id="micBtn"
+    title="Push to talk"
+    onmousedown="startPTT()"
+    onmouseup="stopPTT()"
+    ontouchstart="startPTT(event)"
+    ontouchend="stopPTT(event)"
+  >
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="1" width="6" height="9" rx="3" fill="#8b949e"/>
+      <path d="M2 8a6 6 0 0 0 12 0" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <line x1="8" y1="14" x2="8" y2="15" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5" y1="15" x2="11" y2="15" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <input
+    type="text"
+    id="msgInput"
+    placeholder="Send a message…"
+    onkeydown="if(event.key==='Enter')sendMsg()"
+  >
+  <button class="btn-send" id="sendBtn" onclick="sendMsg()">Send</button>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ==================== State ====================
+let ws = null;
+let connected = false;
+let sessions = {};        // id → { id, name, status, currentTask, type }
+let focusedId = null;
+let conversations = {};   // id → [ { role, content, complete } ]
+let approvals = {};       // id → [ { approvalId, toolName, description } ]
+let reconnectTimer = null;
+let reconnectDelay = 2000;
+
+// Voice state
+let isRecording = false;
+let mediaRecorder = null;
+let mediaStream = null;
+
+// ==================== Init ====================
+updateClock();
+setInterval(updateClock, 1000);
+connect();
+
+// Expose Android bridge callbacks on window
+window.onTranscript = function(text) {
+  const input = document.getElementById('msgInput');
+  if (input) {
+    input.value = text;
+    sendMsg();
+  }
+};
+window.onSpeechComplete = function() {
+  resetMicState();
+};
+window.onVoiceError = function(error) {
+  resetMicState();
+  showToast('Voice error: ' + error, 'urgent');
+};
+
+// ==================== Clock ====================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ==================== Connection ====================
+function connect() {
+  if (ws && ws.readyState < 2) return;
+  clearTimeout(reconnectTimer);
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/client`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    connected = true;
+    reconnectDelay = 2000;
+    updateConnectionUI();
+    ws.send(JSON.stringify({ type: 'list_sessions', requestId: rid() }));
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      handleMessage(JSON.parse(e.data));
+    } catch (err) {
+      console.error('Failed to parse hub message', err);
+    }
+  };
+
+  ws.onerror = () => {};
+
+  ws.onclose = () => {
+    connected = false;
+    updateConnectionUI();
+    reconnectTimer = setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
+      connect();
+    }, reconnectDelay);
+  };
+}
+
+function updateConnectionUI() {
+  const dot = document.getElementById('connDot');
+  const text = document.getElementById('connText');
+  dot.className = 'conn-dot' + (connected ? ' connected' : '');
+  text.textContent = connected ? 'Connected' : 'Reconnecting…';
+  if (connected) showToast('Connected to hub', 'info');
+}
+
+function rid() { return Math.random().toString(36).slice(2, 10); }
+
+// ==================== Message Handling ====================
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'session_list': {
+      sessions = {};
+      (msg.sessions || []).forEach(s => { sessions[s.id] = s; });
+      renderSessionSelect();
+      renderConversation();
+      break;
+    }
+
+    case 'session_update': {
+      if (!sessions[msg.sessionId]) {
+        sessions[msg.sessionId] = { id: msg.sessionId, name: msg.sessionId, type: 'claude_code' };
+      }
+      sessions[msg.sessionId].status = msg.status;
+      sessions[msg.sessionId].currentTask = msg.currentTask;
+      renderSessionSelect();
+      if (focusedId === msg.sessionId) renderSessionStatusBar();
+      break;
+    }
+
+    case 'claude_response': {
+      if (!conversations[msg.sessionId]) conversations[msg.sessionId] = [];
+      const convo = conversations[msg.sessionId];
+      const last = convo[convo.length - 1];
+      if (last && last.role === 'assistant' && !last.complete) {
+        last.content += msg.content;
+        last.complete = msg.isComplete;
+      } else {
+        convo.push({ role: 'assistant', content: msg.content, complete: msg.isComplete });
+      }
+      if (focusedId === msg.sessionId) renderConversation();
+      break;
+    }
+
+    case 'notification': {
+      const n = msg.notification;
+      if (n.type === 'approval_required') {
+        if (!approvals[n.sessionId]) approvals[n.sessionId] = [];
+        approvals[n.sessionId].push({
+          approvalId: n.id,
+          toolName: n.title ? n.title.replace('Approval: ', '') : 'Tool',
+          description: n.body || '',
+        });
+        if (focusedId === n.sessionId) renderApprovals();
+        showToast('Approval required: ' + (n.title || ''), 'high');
+      } else {
+        showToast((n.title ? n.title + ': ' : '') + (n.body || ''), n.priority || 'normal');
+      }
+      break;
+    }
+
+    case 'error':
+      console.error(`Hub error [${msg.code}]: ${msg.message}`);
+      showToast(`Hub error: ${msg.message}`, 'urgent');
+      break;
+  }
+  updateSessionCount();
+}
+
+function updateSessionCount() {
+  const count = Object.keys(sessions).length;
+  document.getElementById('sessionCount').textContent =
+    `${count} Session${count !== 1 ? 's' : ''}`;
+}
+
+// ==================== Session Switcher ====================
+function renderSessionSelect() {
+  const sel = document.getElementById('sessionSelect');
+  const prev = sel.value;
+  const ids = Object.keys(sessions);
+
+  if (ids.length === 0) {
+    sel.innerHTML = '<option value="">— No sessions —</option>';
+    focusedId = null;
+    renderSessionStatusBar();
+    renderConversation();
+    return;
+  }
+
+  sel.innerHTML = ids.map(id => {
+    const s = sessions[id];
+    return `<option value="${esc(id)}">${esc(s.name || id)}</option>`;
+  }).join('');
+
+  // Restore previous focus if still available, else pick first
+  if (prev && sessions[prev]) {
+    sel.value = prev;
+    focusedId = prev;
+  } else if (!focusedId || !sessions[focusedId]) {
+    focusedId = ids[0];
+    sel.value = focusedId;
+    if (ws && connected) {
+      ws.send(JSON.stringify({ type: 'set_focus', requestId: rid(), sessionId: focusedId }));
+    }
+  }
+
+  renderSessionStatusBar();
+}
+
+function onSessionSelectChange() {
+  const sel = document.getElementById('sessionSelect');
+  const id = sel.value;
+  if (!id) return;
+  focusedId = id;
+  if (ws && connected) {
+    ws.send(JSON.stringify({ type: 'set_focus', requestId: rid(), sessionId: id }));
+  }
+  renderSessionStatusBar();
+  renderConversation();
+  renderApprovals();
+}
+
+function renderSessionStatusBar() {
+  const dot = document.getElementById('sessionStatusDot');
+  const taskEl = document.getElementById('sessionTask');
+  if (!focusedId || !sessions[focusedId]) {
+    dot.className = 'session-status-dot status-disconnected';
+    taskEl.textContent = '';
+    return;
+  }
+  const s = sessions[focusedId];
+  dot.className = 'session-status-dot status-' + (s.status || 'disconnected');
+  taskEl.textContent = s.currentTask || s.status || '';
+}
+
+// ==================== Approvals ====================
+function renderApprovals() {
+  const area = document.getElementById('approvalsArea');
+  if (!focusedId) { area.innerHTML = ''; return; }
+  const list = approvals[focusedId] || [];
+  if (list.length === 0) { area.innerHTML = ''; return; }
+  area.innerHTML = list.map(a => `
+    <div class="approval-card">
+      <div class="approval-title">Approval Required: ${esc(a.toolName)}</div>
+      <div class="approval-desc">${esc(a.description)}</div>
+      <div class="approval-actions">
+        <button class="btn-approve" onclick="decide('${esc(focusedId)}','${esc(a.approvalId)}','approve')">Approve</button>
+        <button class="btn-deny" onclick="decide('${esc(focusedId)}','${esc(a.approvalId)}','deny')">Deny</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function decide(sessionId, approvalId, decision) {
+  if (!connected) return;
+  ws.send(JSON.stringify({
+    type: 'approval_decision',
+    requestId: rid(),
+    sessionId,
+    approvalId,
+    decision,
+  }));
+  if (approvals[sessionId]) {
+    approvals[sessionId] = approvals[sessionId].filter(a => a.approvalId !== approvalId);
+  }
+  renderApprovals();
+}
+
+// ==================== Conversation ====================
+function renderConversation() {
+  const el = document.getElementById('convo');
+  const emptyEl = document.getElementById('emptyState');
+
+  if (!focusedId || !sessions[focusedId]) {
+    el.innerHTML = '<div class="empty-state" id="emptyState">Select a session to begin</div>';
+    return;
+  }
+
+  const convo = conversations[focusedId] || [];
+  if (convo.length === 0) {
+    el.innerHTML = '<div class="empty-state" id="emptyState">No messages yet</div>';
+    return;
+  }
+
+  el.innerHTML = convo.map(m => {
+    const cls = m.role === 'user' ? 'user' : 'assistant';
+    const sender = m.role === 'user' ? 'You' : 'Claude';
+    return `<div class="msg ${cls}">
+      <div class="sender">${sender}</div>
+      <div class="bubble">${esc(m.content)}</div>
+    </div>`;
+  }).join('');
+
+  // Scroll to bottom
+  el.scrollTop = el.scrollHeight;
+}
+
+// ==================== Send Message ====================
+function sendMsg() {
+  const input = document.getElementById('msgInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !focusedId || !connected) return;
+
+  if (!conversations[focusedId]) conversations[focusedId] = [];
+  conversations[focusedId].push({ role: 'user', content: text, complete: true });
+
+  ws.send(JSON.stringify({
+    type: 'send_message',
+    requestId: rid(),
+    sessionId: focusedId,
+    message: { role: 'user', content: text },
+  }));
+
+  input.value = '';
+  renderConversation();
+}
+
+// ==================== PTT Voice ====================
+function startPTT(evt) {
+  if (evt) evt.preventDefault();
+  if (isRecording) return;
+  isRecording = true;
+
+  const btn = document.getElementById('micBtn');
+  btn.classList.add('recording');
+
+  if (window.Android && typeof window.Android.startListening === 'function') {
+    window.Android.startListening();
+  } else {
+    startWebAudioRecording();
+  }
+}
+
+function stopPTT(evt) {
+  if (evt) evt.preventDefault();
+  if (!isRecording) return;
+
+  if (window.Android && typeof window.Android.stopListening === 'function') {
+    window.Android.stopListening();
+    // State reset will happen via onSpeechComplete callback from Android
+  } else {
+    stopWebAudioRecording();
+    resetMicState();
+  }
+}
+
+function resetMicState() {
+  isRecording = false;
+  const btn = document.getElementById('micBtn');
+  if (btn) btn.classList.remove('recording');
+}
+
+// ---- Web Audio API fallback (for browser testing) ----
+function startWebAudioRecording() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Microphone not available in this browser', 'urgent');
+    resetMicState();
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      mediaStream = stream;
+      const chunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        // Blob created but bridge unavailable — just notify user
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
+        showToast(`Voice recorded (${(blob.size / 1024).toFixed(1)}KB) — Android bridge unavailable`, 'normal');
+        // Clean up stream tracks
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(t => t.stop());
+          mediaStream = null;
+        }
+        mediaRecorder = null;
+      };
+
+      mediaRecorder.start();
+    })
+    .catch(err => {
+      showToast('Mic access denied: ' + err.message, 'urgent');
+      resetMicState();
+    });
+}
+
+function stopWebAudioRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+}
+
+// ==================== Toast Notifications ====================
+function showToast(message, priority) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (priority === 'urgent' || priority === 'high' ? ` priority-${priority}` : '');
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // Auto-dismiss after 5s
+  const fadeTimer = setTimeout(() => {
+    toast.classList.add('fading');
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 400);
+  }, 5000);
+
+  // Click to dismiss early
+  toast.addEventListener('click', () => {
+    clearTimeout(fadeTimer);
+    toast.classList.add('fading');
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 400);
+  });
+}
+
+// ==================== Utilities ====================
+function esc(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
