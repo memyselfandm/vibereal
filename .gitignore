@@ -23,5 +23,8 @@ hub/.env
 unity/Assets/Resources/config.secrets.json
 unity/Assets/Resources/config.secrets.json.meta
 
+# Claude Code
+.claude/worktrees/
+
 # OS
 .DS_Store
