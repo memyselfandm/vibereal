@@ -3,7 +3,7 @@
  * Run: node --experimental-transform-types --test src/api-router.test.ts
  */
 
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
@@ -15,7 +15,7 @@ import { Socket } from "node:net";
 // ---------------------------------------------------------------------------
 
 import * as sessionRegistry from "./session-registry.ts";
-import { handleApiRequest } from "./api-router.ts";
+import { handleApiRequest, deps } from "./api-router.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -25,12 +25,23 @@ function makeReq(opts: {
   method?: string;
   url?: string;
   headers?: Record<string, string>;
+  body?: string;
 }): IncomingMessage {
   const socket = new Socket();
   const req = new IncomingMessage(socket);
   req.method = opts.method ?? "GET";
   req.url = opts.url ?? "/";
   Object.assign(req.headers, { host: "localhost", ...(opts.headers ?? {}) });
+
+  // Emit body asynchronously so readBody() resolves properly
+  if (opts.body !== undefined) {
+    const bodyStr = opts.body;
+    setImmediate(() => {
+      req.emit("data", Buffer.from(bodyStr));
+      req.emit("end");
+    });
+  }
+
   return req;
 }
 
@@ -41,7 +52,11 @@ interface CapturedResponse {
   ended: boolean;
 }
 
-function makeRes(): { res: ServerResponse; captured: CapturedResponse } {
+function makeRes(): {
+  res: ServerResponse;
+  captured: CapturedResponse;
+  whenEnded: Promise<void>;
+} {
   const socket = new Socket();
   const req = new IncomingMessage(socket);
   const res = new ServerResponse(req);
@@ -53,6 +68,11 @@ function makeRes(): { res: ServerResponse; captured: CapturedResponse } {
     ended: false,
   };
 
+  let resolveEnded!: () => void;
+  const whenEnded = new Promise<void>((resolve) => {
+    resolveEnded = resolve;
+  });
+
   res.writeHead = (status: number, headers?: any) => {
     captured.statusCode = status;
     if (headers) Object.assign(captured.headers, headers);
@@ -62,6 +82,7 @@ function makeRes(): { res: ServerResponse; captured: CapturedResponse } {
   res.end = (chunk?: any) => {
     if (chunk) captured.body += chunk.toString();
     captured.ended = true;
+    resolveEnded();
     return res;
   };
 
@@ -70,7 +91,7 @@ function makeRes(): { res: ServerResponse; captured: CapturedResponse } {
     return res as any;
   };
 
-  return { res, captured };
+  return { res, captured, whenEnded };
 }
 
 function parsedBody(captured: CapturedResponse): any {
@@ -275,34 +296,179 @@ describe("GET /api/sessions/:id", () => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/sessions — stub
+// POST /api/sessions
 // ---------------------------------------------------------------------------
 
 describe("POST /api/sessions", () => {
-  it("returns 501 NOT_IMPLEMENTED", () => {
-    const req = makeReq({ method: "POST", url: "/api/sessions" });
-    const { res, captured } = makeRes();
-    handleApiRequest(req, res);
+  let originalPm: typeof deps.processManager;
 
-    assert.equal(captured.statusCode, 501);
+  beforeEach(() => {
+    originalPm = deps.processManager;
+  });
+
+  afterEach(() => {
+    deps.processManager = originalPm;
+    clearRegistry();
+  });
+
+  it("returns 503 SERVICE_UNAVAILABLE when process manager is disabled", async () => {
+    deps.processManager = { ...originalPm, isEnabled: () => false };
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sessions",
+      body: JSON.stringify({ prompt: "hello" }),
+    });
+    const { res, captured, whenEnded } = makeRes();
+    handleApiRequest(req, res);
+    await whenEnded;
+
+    assert.equal(captured.statusCode, 503);
     const body = parsedBody(captured);
-    assert.equal(body.error.code, "NOT_IMPLEMENTED");
+    assert.equal(body.error.code, "SERVICE_UNAVAILABLE");
+  });
+
+  it("returns 400 BAD_REQUEST when prompt is missing", async () => {
+    deps.processManager = { ...originalPm, isEnabled: () => true };
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sessions",
+      body: JSON.stringify({ workingDirectory: "/tmp" }),
+    });
+    const { res, captured, whenEnded } = makeRes();
+    handleApiRequest(req, res);
+    await whenEnded;
+
+    assert.equal(captured.statusCode, 400);
+    const body = parsedBody(captured);
+    assert.equal(body.error.code, "BAD_REQUEST");
+  });
+
+  it("returns 400 BAD_REQUEST when body is empty", async () => {
+    deps.processManager = { ...originalPm, isEnabled: () => true };
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sessions",
+      body: "",
+    });
+    const { res, captured, whenEnded } = makeRes();
+    handleApiRequest(req, res);
+    await whenEnded;
+
+    assert.equal(captured.statusCode, 400);
+    const body = parsedBody(captured);
+    assert.equal(body.error.code, "BAD_REQUEST");
+  });
+
+  it("returns 201 with session info when valid request", async () => {
+    deps.processManager = {
+      ...originalPm,
+      isEnabled: () => true,
+      create: () => ({ sessionId: "managed-abc123", name: "Test Session", status: "starting" }),
+    };
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sessions",
+      body: JSON.stringify({ prompt: "Write a hello world program" }),
+    });
+    const { res, captured, whenEnded } = makeRes();
+    handleApiRequest(req, res);
+    await whenEnded;
+
+    assert.equal(captured.statusCode, 201);
+    const body = parsedBody(captured);
+    assert.equal(body.sessionId, "managed-abc123");
+    assert.equal(body.name, "Test Session");
+    assert.equal(body.status, "starting");
+  });
+
+  it("returns 500 INTERNAL_ERROR when create throws", async () => {
+    deps.processManager = {
+      ...originalPm,
+      isEnabled: () => true,
+      create: () => {
+        throw new Error("spawn failed");
+      },
+    };
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sessions",
+      body: JSON.stringify({ prompt: "do something" }),
+    });
+    const { res, captured, whenEnded } = makeRes();
+    handleApiRequest(req, res);
+    await whenEnded;
+
+    assert.equal(captured.statusCode, 500);
+    const body = parsedBody(captured);
+    assert.equal(body.error.code, "INTERNAL_ERROR");
+    assert.ok(body.error.message.includes("spawn failed"));
   });
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /api/sessions/:id — stub
+// DELETE /api/sessions/:id
 // ---------------------------------------------------------------------------
 
 describe("DELETE /api/sessions/:id", () => {
-  it("returns 501 NOT_IMPLEMENTED", () => {
-    const req = makeReq({ method: "DELETE", url: "/api/sessions/some-id" });
+  let originalPm: typeof deps.processManager;
+
+  beforeEach(() => {
+    originalPm = deps.processManager;
+    clearRegistry();
+  });
+
+  afterEach(() => {
+    deps.processManager = originalPm;
+    clearRegistry();
+  });
+
+  it("returns 404 when session is not in registry and not managed", () => {
+    deps.processManager = { ...originalPm, isManaged: () => false };
+
+    const req = makeReq({ method: "DELETE", url: "/api/sessions/ghost-session" });
     const { res, captured } = makeRes();
     handleApiRequest(req, res);
 
-    assert.equal(captured.statusCode, 501);
+    assert.equal(captured.statusCode, 404);
     const body = parsedBody(captured);
-    assert.equal(body.error.code, "NOT_IMPLEMENTED");
+    assert.equal(body.error.code, "NOT_FOUND");
+  });
+
+  it("returns 400 BAD_REQUEST when session exists in registry but is not managed", () => {
+    deps.processManager = { ...originalPm, isManaged: () => false };
+    sessionRegistry.register("external-session", "External", null as any);
+
+    const req = makeReq({ method: "DELETE", url: "/api/sessions/external-session" });
+    const { res, captured } = makeRes();
+    handleApiRequest(req, res);
+
+    assert.equal(captured.statusCode, 400);
+    const body = parsedBody(captured);
+    assert.equal(body.error.code, "BAD_REQUEST");
+    assert.ok(body.error.message.includes("external"));
+  });
+
+  it("returns 200 and kills when session is managed", () => {
+    deps.processManager = {
+      ...originalPm,
+      isManaged: () => true,
+      kill: () => true,
+    };
+    sessionRegistry.registerManaged("managed-xyz", "Managed");
+
+    const req = makeReq({ method: "DELETE", url: "/api/sessions/managed-xyz" });
+    const { res, captured } = makeRes();
+    handleApiRequest(req, res);
+
+    assert.equal(captured.statusCode, 200);
+    const body = parsedBody(captured);
+    assert.equal(body.status, "killed");
+    assert.equal(body.sessionId, "managed-xyz");
   });
 });
 

@@ -289,6 +289,91 @@
   .status-error       { background: var(--red); }
   .status-disconnected { background: var(--gray); }
 
+  /* ---- Hub switcher bar ---- */
+  .hub-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .hub-bar select {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+  }
+  .hub-bar select:focus { outline: none; border-color: var(--accent); }
+
+  /* ---- New Session button ---- */
+  .btn-new-session {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .btn-new-session:hover { opacity: 0.85; }
+  .btn-new-session:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---- New Session form ---- */
+  .new-session-form {
+    display: none;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .new-session-form.visible { display: flex; flex-direction: column; gap: 6px; }
+  .new-session-form input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .new-session-form input:focus { outline: none; border-color: var(--accent); }
+  .new-session-form input::placeholder { color: var(--text-muted); }
+  .new-session-form .form-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+  .new-session-form .form-actions button {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+  }
+  .new-session-form .btn-create { background: var(--green); }
+  .new-session-form .btn-cancel { background: var(--gray); }
+
   /* ---- Toast notifications ---- */
   .toast-container {
     position: fixed;
@@ -331,13 +416,32 @@
   <span class="clock" id="clock"></span>
 </div>
 
+<!-- Hub switcher (hidden in single-hub mode) -->
+<div class="hub-bar" id="hubBar" style="display:none">
+  <span style="font-size:11px;color:var(--text-muted)">Hub:</span>
+  <select id="hubSelect" onchange="onHubSelectChange()">
+  </select>
+</div>
+
 <!-- Session switcher -->
 <div class="session-bar">
   <div class="session-status-dot" id="sessionStatusDot"></div>
   <select id="sessionSelect" onchange="onSessionSelectChange()">
     <option value="">— No sessions —</option>
   </select>
+  <button class="btn-new-session" id="btnNewSession" onclick="toggleNewSessionForm()" title="New session" disabled>+</button>
   <span class="session-task" id="sessionTask"></span>
+</div>
+
+<!-- New session form (hidden by default) -->
+<div class="new-session-form" id="newSessionForm">
+  <input type="text" id="newSessionPrompt" placeholder="Prompt (required)" required>
+  <input type="text" id="newSessionDir" placeholder="Working directory (optional, e.g. /tmp)">
+  <input type="text" id="newSessionName" placeholder="Session name (optional)">
+  <div class="form-actions">
+    <button class="btn-cancel" onclick="hideNewSessionForm()">Cancel</button>
+    <button class="btn-create" onclick="createSession()">Create</button>
+  </div>
 </div>
 
 <!-- Approval cards -->
@@ -389,6 +493,10 @@ let approvals = {};       // id → [ { approvalId, toolName, description } ]
 let reconnectTimer = null;
 let reconnectDelay = 2000;
 
+// Hub switcher state
+let currentHubUrl = null; // null = use location.host (self)
+let hubFetchTimer = null;
+
 // Voice state
 let isRecording = false;
 let mediaRecorder = null;
@@ -398,6 +506,8 @@ let mediaStream = null;
 updateClock();
 setInterval(updateClock, 1000);
 connect();
+fetchHubs();
+hubFetchTimer = setInterval(fetchHubs, 30000);
 
 // Expose Android bridge callbacks on window
 window.onTranscript = function(text) {
@@ -423,12 +533,30 @@ function updateClock() {
 }
 
 // ==================== Connection ====================
+function getWsUrl() {
+  if (currentHubUrl) {
+    try {
+      const u = new URL(currentHubUrl);
+      const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${u.host}/client`;
+    } catch {
+      // fall through to default
+    }
+  }
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}/client`;
+}
+
+function getApiBaseUrl() {
+  if (currentHubUrl) return currentHubUrl;
+  return location.origin;
+}
+
 function connect() {
   if (ws && ws.readyState < 2) return;
   clearTimeout(reconnectTimer);
 
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${proto}//${location.host}/client`;
+  const url = getWsUrl();
   ws = new WebSocket(url);
 
   ws.onopen = () => {
@@ -463,10 +591,124 @@ function updateConnectionUI() {
   const text = document.getElementById('connText');
   dot.className = 'conn-dot' + (connected ? ' connected' : '');
   text.textContent = connected ? 'Connected' : 'Reconnecting…';
+  const btnNew = document.getElementById('btnNewSession');
+  if (btnNew) btnNew.disabled = !connected;
   if (connected) showToast('Connected to hub', 'info');
 }
 
+function switchHub(hubUrl) {
+  currentHubUrl = hubUrl || null;
+  // Prevent the onclose handler from scheduling a reconnect to the old hub
+  if (ws) {
+    ws.onclose = null;
+    ws.close();
+    ws = null;
+  }
+  connected = false;
+  sessions = {};
+  conversations = {};
+  approvals = {};
+  focusedId = null;
+  renderSessionSelect();
+  renderConversation();
+  renderApprovals();
+  updateConnectionUI();
+  reconnectDelay = 2000;
+  connect();
+}
+
 function rid() { return Math.random().toString(36).slice(2, 10); }
+
+// ==================== Hub Switcher ====================
+async function fetchHubs() {
+  try {
+    const resp = await fetch(`${getApiBaseUrl()}/api/registry/hubs`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const hubs = data.hubs || data;
+    if (!Array.isArray(hubs) || hubs.length === 0) {
+      document.getElementById('hubBar').style.display = 'none';
+      return;
+    }
+    renderHubSelect(hubs);
+  } catch {
+    document.getElementById('hubBar').style.display = 'none';
+  }
+}
+
+function renderHubSelect(hubs) {
+  const bar = document.getElementById('hubBar');
+  const sel = document.getElementById('hubSelect');
+
+  sel.innerHTML = hubs.map(hub => {
+    const isSelf = hub.self === true || hub.isSelf === true;
+    const label = isSelf
+      ? `\u25CF ${esc(hub.name || hub.url || 'This hub')} (this hub)`
+      : `${esc(hub.name || hub.url || hub.id || 'Hub')} — ${esc(hub.status || 'unknown')}`;
+    const value = isSelf ? '' : esc(hub.url || hub.id || '');
+    const selected = isSelf && !currentHubUrl ? 'selected' : (hub.url === currentHubUrl ? 'selected' : '');
+    return `<option value="${value}" ${selected}>${label}</option>`;
+  }).join('');
+
+  bar.style.display = 'flex';
+}
+
+function onHubSelectChange() {
+  const sel = document.getElementById('hubSelect');
+  const hubUrl = sel.value || null;
+  if (hubUrl === currentHubUrl) return;
+  switchHub(hubUrl);
+}
+
+// ==================== New Session ====================
+function toggleNewSessionForm() {
+  const form = document.getElementById('newSessionForm');
+  if (form.classList.contains('visible')) {
+    hideNewSessionForm();
+  } else {
+    form.classList.add('visible');
+    document.getElementById('newSessionPrompt').focus();
+  }
+}
+
+function hideNewSessionForm() {
+  const form = document.getElementById('newSessionForm');
+  form.classList.remove('visible');
+  document.getElementById('newSessionPrompt').value = '';
+  document.getElementById('newSessionDir').value = '';
+  document.getElementById('newSessionName').value = '';
+}
+
+async function createSession() {
+  const promptInput = document.getElementById('newSessionPrompt');
+  const dirInput = document.getElementById('newSessionDir');
+  const nameInput = document.getElementById('newSessionName');
+  const prompt = promptInput.value.trim();
+  if (!prompt) { showToast('Prompt is required', 'urgent'); return; }
+
+  try {
+    const body = { prompt };
+    const dir = dirInput.value.trim();
+    const name = nameInput.value.trim();
+    if (dir) body.workingDirectory = dir;
+    if (name) body.name = name;
+
+    const resp = await fetch(`${getApiBaseUrl()}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showToast(data.error?.message || 'Failed to create session', 'urgent');
+      return;
+    }
+    showToast(`Session "${data.name || data.id || 'new'}" created`, 'normal');
+    hideNewSessionForm();
+  } catch (err) {
+    showToast('Failed to create session: ' + err.message, 'urgent');
+  }
+}
 
 // ==================== Message Handling ====================
 function handleMessage(msg) {
